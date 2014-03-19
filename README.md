@@ -1,6 +1,6 @@
 # lein-4clj
 
-(4clojure)[http://www.4clojure.com/] is a great site for practicing various datatypes and concepts in Clojure.
+[4clojure](http://www.4clojure.com/) is a great site for practicing various datatypes and concepts in Clojure.
 However, the code editor on the website is somewhat limited, mostly because it doesn't have a REPL to test out individual parts of your code.
 I'm not affiliated with 4clojure in any way, but I've created a plugin for working on 4clojure problems in the comfort of your own IDE.
 
