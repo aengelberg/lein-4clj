@@ -24,13 +24,13 @@
   [nsname problem]
   (str "(ns " nsname ")\n\n"
        (fetch-test-cases problem) "\n\n"
-       "(def blank\n"
+       "(def __\n"
        "  ; fill in the blank!\n"
        "  )\n\n"
        "(defn test-code\n"
        "  []\n"
        "  (doseq [[test-case test-number] (map vector test-cases (range))]\n"
-       "    (if (eval `(let [~'__ blank]\n"
+       "    (if (eval `(let [~'__ __]\n"
        "                 ~test-case))\n"
        "      (printf \"Test #%d passed!\\n\" (inc test-number))\n"
        "      (printf \"Test #%d failed!\\n\" (inc test-number)))))\n"))
