@@ -9,13 +9,13 @@ I'm not affiliated with 4clojure in any way, but I've created a plugin for worki
 
 Use this for user-level plugins:
 
-Put `[lein-4clj "0.1.0"]` into the `:plugins` vector of your
+Put `[lein-4clj "0.1.1"]` into the `:plugins` vector of your
 `:user` profile, or if you are on Leiningen 1.x do `lein plugin install
-lein-4clj 0.1.0`.
+lein-4clj 0.1.1`.
 
 Use this for project-level plugins:
 
-Put `[lein-4clj "0.1.0"]` into the `:plugins` vector of your project.clj.
+Put `[lein-4clj "0.1.1"]` into the `:plugins` vector of your project.clj.
 
 	$ lein four :ns <name>
                 :problem <4clojure-problem-number>
