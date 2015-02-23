@@ -1,8 +1,21 @@
 (ns leiningen.four
   "A plugin for working on 4clojure problems."
-  (:use clojure.java.io))
+  (:use clojure.java.io)
+  (:require [clojure.string :as str]))
 
-(defn fetch-test-cases [problem]
+(defn indent-rest-lines
+  "Indents the lines after the first with the specified number of spaces.
+
+e.g. (indent-rest-lines \"A\\nB\\nC\" 3) => \"A\\n   B\\n   C\""
+  [text columns]
+  (let [lines (str/split-lines text)]
+    (str/join "\n" (cons (first lines)
+                     (for [line (rest lines)]
+                       (str (apply str (repeat columns " "))
+                         line))))))
+
+(defn fetch-test-cases
+  [problem]
   (println "Fetching test cases from the 4clojure website...")
   (let [body (try
                (slurp (str "http://www.4clojure.com/problem/" problem))
@@ -14,10 +27,11 @@
              " '[\n"
              "    ; copy the 4clojure test cases here\n"
              "  ])"))
-      (let [matches (re-seq #"(?<=\<pre class=\"test\"\>).+?(?=\</pre\>)" body)]
+      (let [matches (re-seq #"(?<=\<pre class=\"test\"\>)[\s\S]+?(?=\</pre\>)" body)]
         (str "(def test-cases\n"
              " '["
-             (clojure.string/join "\n   " matches)
+             (str/join "\n   " (for [test-case matches]
+                                 (indent-rest-lines test-case 3)))
              "])")))))
 
 (defn file-template
