@@ -10,44 +10,64 @@ e.g. (indent-rest-lines \"A\\nB\\nC\" 3) => \"A\\n   B\\n   C\""
   [text columns]
   (let [lines (str/split-lines text)]
     (str/join "\n" (cons (first lines)
-                     (for [line (rest lines)]
-                       (str (apply str (repeat columns " "))
-                         line))))))
+                         (for [line (rest lines)]
+                           (str (apply str (repeat columns " "))
+                                line))))))
 
-(defn fetch-test-cases
+(defn get-prob-title [body]
+  (let [matches (re-seq #"<div id=\"prob-title\">(.+?)<\/div>" body)]
+    (if-not (nil? matches)
+      (->> matches
+           (first)
+           (second)))))
+
+(defn get-prob-desc [body]
+  (let [matches (re-seq #"<div id=\"prob-desc\">(.+?)<br \/>" body)]
+    (if-not (nil? matches)
+      (->> matches
+           (first)
+           (second)))))
+
+(defn fetch-body
   [problem]
   (println "Fetching test cases from the 4clojure website...")
-  (let [body (try
-               (slurp (str "http://www.4clojure.com/problem/" problem))
-               (catch Exception e
-                 nil))]
-    (if-not body
-      (do (println "Could not reach 4clojure website.")
+  (try
+    (slurp (str "http://www.4clojure.com/problem/" problem))
+    (catch Exception e
+      nil)))
+
+(defn get-test-cases
+  [body]
+  (if-not body
+    (do (println "Could not reach 4clojure website.")
         (str "(def test-cases\n"
              " '[\n"
              "    ; copy the 4clojure test cases here\n"
              "  ])"))
-      (let [matches (re-seq #"(?<=\<pre class=\"test\"\>)[\s\S]+?(?=\</pre\>)" body)]
-        (str "(def test-cases\n"
-             " '["
-             (str/join "\n   " (for [test-case matches]
-                                 (indent-rest-lines test-case 3)))
-             "])")))))
+    (let [matches (re-seq #"(?<=\<pre class=\"test\"\>)[\s\S]+?(?=\</pre\>)" body)]
+      (str "(def test-cases\n"
+           " '["
+           (str/join "\n   " (for [test-case matches]
+                               (indent-rest-lines test-case 3)))
+           "])"))))
 
 (defn file-template
   [nsname problem]
-  (str "(ns " nsname ")\n\n"
-       (fetch-test-cases problem) "\n\n"
-       "(def __\n"
-       "  ; fill in the blank!\n"
-       "  )\n\n"
-       "(defn test-code\n"
-       "  []\n"
-       "  (doseq [[test-case test-number] (map vector test-cases (range))]\n"
-       "    (if (eval `(let [~'__ __]\n"
-       "                 ~test-case))\n"
-       "      (printf \"Test #%d passed!\\n\" (inc test-number))\n"
-       "      (printf \"Test #%d failed!\\n\" (inc test-number)))))\n"))
+  (let [body (fetch-body problem)]
+    (str "(ns " nsname ")\n\n"
+         "; " (get-prob-title body) "\n"
+         "; " (get-prob-desc body) "\n\n"
+         (get-test-cases body) "\n\n"
+         "(def __\n"
+         "  ; fill in the blank!\n"
+         "  )\n\n"
+         "(defn test-code\n"
+         "  []\n"
+         "  (doseq [[test-case test-number] (map vector test-cases (range))]\n"
+         "    (if (eval `(let [~'__ __]\n"
+         "                 ~test-case))\n"
+         "      (printf \"Test #%d passed!\\n\" (inc test-number))\n"
+         "      (printf \"Test #%d failed!\\n\" (inc test-number)))))\n")))
 
 (defn ^:no-project-needed four
   "A plugin for working on 4clojure problems in the comfort of your own IDE.
@@ -69,13 +89,13 @@ and :filename is required if you're not inside a lein project."
                  (keyword (apply str (rest arg)))
                  arg))
         args (try (apply hash-map args)
-               (catch Exception e
-                 nil))]
+                  (catch Exception e
+                    nil))]
     (cond
       (not args) (println "Args don't form a proper map.")
       (not (or (nil? (:problem args))
                (try (Integer/parseInt (:problem args))
-                 (catch Exception e nil)))) (println ":problem must be an integer, or ommitted from the arg map.")
+                    (catch Exception e nil)))) (println ":problem must be an integer, or ommitted from the arg map.")
       (not (or (:problem args)
                (:ns args))) (println "Please provide at least :problem or :ns; I need to know what to call the namespace!")
       (not (or (:root project)
@@ -84,7 +104,7 @@ and :filename is required if you're not inside a lein project."
       (let [src (first (:source-paths project))
             filename (:filename args)
             problem (try (Integer/parseInt (:problem args))
-                      (catch Exception e nil))
+                         (catch Exception e nil))
             nsname (or (:ns args) (str "problem" problem))
             file-path (or filename
                           (str src "/" (clojure.string/replace nsname #"\." "/") ".clj"))
