@@ -14,19 +14,36 @@ e.g. (indent-rest-lines \"A\\nB\\nC\" 3) => \"A\\n   B\\n   C\""
                            (str (apply str (repeat columns " "))
                                 line))))))
 
-(defn get-prob-title [body]
+;; FIXME gestire il caso in cui il body è nil
+(defn get-prob-title
+  [body]
   (let [matches (re-seq #"<div id=\"prob-title\">(.+?)<\/div>" body)]
     (if-not (nil? matches)
       (->> matches
            (first)
            (second)))))
 
-(defn get-prob-desc [body]
+;; FIXME gestire il caso in cui il body è nil
+(defn get-prob-desc
+  [body]
   (let [matches (re-seq #"<div id=\"prob-desc\">(.+?)<br \/>" body)]
     (if-not (nil? matches)
       (->> matches
            (first)
            (second)))))
+
+(defn wrap-text
+  [size text]
+  (let [rstripped-text (str/replace (str text " ") #"\n" " ")
+        cleaned-text (str/replace rstripped-text #"\s+" " ")]
+    (->> (re-seq
+           (re-pattern (str ".{1," size "}\\s|.{1," size "}")) cleaned-text)
+         (map #(str/replace % #"\s+$" "")))))
+
+(defn comment-lines
+  [lines]
+  (->> (map (partial str "; ") lines)
+       (str/join "\n")))
 
 (defn fetch-body
   [problem]
@@ -55,8 +72,9 @@ e.g. (indent-rest-lines \"A\\nB\\nC\" 3) => \"A\\n   B\\n   C\""
   [nsname problem]
   (let [body (fetch-body problem)]
     (str "(ns " nsname ")\n\n"
-         "; " (get-prob-title body) "\n"
-         "; " (get-prob-desc body) "\n\n"
+         (comment-lines [(get-prob-title body)]) "\n"
+         "; \n"
+         (comment-lines (wrap-text 75 (get-prob-desc body))) "\n\n"
          (get-test-cases body) "\n\n"
          "(def __\n"
          "  ; fill in the blank!\n"
