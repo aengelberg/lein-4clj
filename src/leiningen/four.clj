@@ -1,7 +1,8 @@
 (ns leiningen.four
   "A plugin for working on 4clojure problems."
   (:use clojure.java.io)
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [jsoup.soup :as js]))
 
 (defn indent-rest-lines
   "Indents the lines after the first with the specified number of spaces.
@@ -10,44 +11,82 @@ e.g. (indent-rest-lines \"A\\nB\\nC\" 3) => \"A\\n   B\\n   C\""
   [text columns]
   (let [lines (str/split-lines text)]
     (str/join "\n" (cons (first lines)
-                     (for [line (rest lines)]
-                       (str (apply str (repeat columns " "))
-                         line))))))
+                         (for [line (rest lines)]
+                           (str (apply str (repeat columns " "))
+                                line))))))
 
-(defn fetch-test-cases
+(defn get-prob-title
+  [^org.jsoup.nodes.Document body]
+  (let [matches (.select body "#prob-title")]
+    (if (empty? matches)
+      "Could not fetch problem title."
+      (.text matches))))
+
+(defn get-prob-desc
+  [^org.jsoup.nodes.Document body]
+  (let [body-cloned (.clone body)]
+    (.remove (.select body-cloned "#prob-desc .testcases"))
+    (let [matches (.select body-cloned "#prob-desc")]
+      (if (empty? matches)
+        "Could not fetch problem description."
+        (.text matches)))))
+
+(defn wrap-text
+  [size text]
+
+  ;; Wrap text algorithm derived from
+  ;; https://rosettacode.org/wiki/Word_wrap#Clojure
+
+  (let [rstripped-text (str/replace (str text " ") #"\n" " ")]
+    (->> (re-seq
+           (re-pattern (str ".{1," size "}\\s|.{1," size "}")) rstripped-text)
+         (map #(str/replace % #"\s+$" "")))))
+
+(defn comment-lines
+  [lines]
+  (->> (map (partial str "; ") lines)
+       (str/join "\n")))
+
+(defn ^org.jsoup.nodes.Document fetch-body
   [problem]
   (println "Fetching test cases from the 4clojure website...")
-  (let [body (try
-               (slurp (str "http://www.4clojure.com/problem/" problem))
-               (catch Exception e
-                 nil))]
-    (if-not body
-      (do (println "Could not reach 4clojure website.")
+  (try
+    (js/get! (str "http://www.4clojure.com/problem/" problem))
+    (catch Exception e
+      nil)))
+
+(defn get-test-cases
+  [^org.jsoup.nodes.Document body]
+  (if-not body
+    (do (println "Could not reach 4clojure website.")
         (str "(def test-cases\n"
              " '[\n"
              "    ; copy the 4clojure test cases here\n"
              "  ])"))
-      (let [matches (re-seq #"(?<=\<pre class=\"test\"\>)[\s\S]+?(?=\</pre\>)" body)]
-        (str "(def test-cases\n"
-             " '["
-             (str/join "\n   " (for [test-case matches]
-                                 (indent-rest-lines test-case 3)))
-             "])")))))
+    (let [matches (map #(.text %) (.select body "#prob-desc .test"))]
+      (str "(def test-cases\n"
+           " '["
+           (str/join "\n   " (for [test-case matches]
+                               (indent-rest-lines test-case 3)))
+           "])"))))
 
 (defn file-template
   [nsname problem]
-  (str "(ns " nsname ")\n\n"
-       (fetch-test-cases problem) "\n\n"
-       "(def __\n"
-       "  ; fill in the blank!\n"
-       "  )\n\n"
-       "(defn test-code\n"
-       "  []\n"
-       "  (doseq [[test-case test-number] (map vector test-cases (range))]\n"
-       "    (if (eval `(let [~'__ __]\n"
-       "                 ~test-case))\n"
-       "      (printf \"Test #%d passed!\\n\" (inc test-number))\n"
-       "      (printf \"Test #%d failed!\\n\" (inc test-number)))))\n"))
+  (let [body (fetch-body problem)]
+    (str "(ns " nsname ")\n\n"
+         "; " (get-prob-title body) "\n; \n"
+         (comment-lines (wrap-text 75 (get-prob-desc body))) "\n\n"
+         (get-test-cases body) "\n\n"
+         "(def __\n"
+         "  ; fill in the blank!\n"
+         "  )\n\n"
+         "(defn test-code\n"
+         "  []\n"
+         "  (doseq [[test-case test-number] (map vector test-cases (range))]\n"
+         "    (if (eval `(let [~'__ __]\n"
+         "                 ~test-case))\n"
+         "      (printf \"Test #%d passed!\\n\" (inc test-number))\n"
+         "      (printf \"Test #%d failed!\\n\" (inc test-number)))))\n")))
 
 (defn ^:no-project-needed four
   "A plugin for working on 4clojure problems in the comfort of your own IDE.
@@ -69,13 +108,13 @@ and :filename is required if you're not inside a lein project."
                  (keyword (apply str (rest arg)))
                  arg))
         args (try (apply hash-map args)
-               (catch Exception e
-                 nil))]
+                  (catch Exception e
+                    nil))]
     (cond
       (not args) (println "Args don't form a proper map.")
       (not (or (nil? (:problem args))
                (try (Integer/parseInt (:problem args))
-                 (catch Exception e nil)))) (println ":problem must be an integer, or ommitted from the arg map.")
+                    (catch Exception e nil)))) (println ":problem must be an integer, or ommitted from the arg map.")
       (not (or (:problem args)
                (:ns args))) (println "Please provide at least :problem or :ns; I need to know what to call the namespace!")
       (not (or (:root project)
@@ -84,7 +123,7 @@ and :filename is required if you're not inside a lein project."
       (let [src (first (:source-paths project))
             filename (:filename args)
             problem (try (Integer/parseInt (:problem args))
-                      (catch Exception e nil))
+                         (catch Exception e nil))
             nsname (or (:ns args) (str "problem" problem))
             file-path (or filename
                           (str src "/" (clojure.string/replace nsname #"\." "/") ".clj"))
