@@ -1,7 +1,8 @@
 (ns leiningen.four
   "A plugin for working on 4clojure problems."
   (:use clojure.java.io)
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [jsoup.soup :as js]))
 
 (defn indent-rest-lines
   "Indents the lines after the first with the specified number of spaces.
@@ -14,23 +15,23 @@ e.g. (indent-rest-lines \"A\\nB\\nC\" 3) => \"A\\n   B\\n   C\""
                            (str (apply str (repeat columns " "))
                                 line))))))
 
-;; FIXME gestire il caso in cui il body è nil
 (defn get-prob-title
   [body]
-  (let [matches (re-seq #"<div id=\"prob-title\">(.+?)<\/div>" body)]
-    (if-not (nil? matches)
+  (let [matches (.select body "#prob-title")]
+    (if (empty? matches)
+      "Could not fetch problem title."
       (->> matches
-           (first)
-           (second)))))
+           (.first)
+           (.text)))))
 
-;; FIXME gestire il caso in cui il body è nil
 (defn get-prob-desc
   [body]
-  (let [matches (re-seq #"<div id=\"prob-desc\">(.+?)<br \/>" body)]
-    (if-not (nil? matches)
+  (let [matches (.select body "#prob-desc")]
+    (if (empty? matches)
+      "Could not fetch problem description."
       (->> matches
-           (first)
-           (second)))))
+           (.first)
+           (.ownText)))))
 
 (defn wrap-text
   [size text]
@@ -49,7 +50,7 @@ e.g. (indent-rest-lines \"A\\nB\\nC\" 3) => \"A\\n   B\\n   C\""
   [problem]
   (println "Fetching test cases from the 4clojure website...")
   (try
-    (slurp (str "http://www.4clojure.com/problem/" problem))
+    (js/get! (str "http://www.4clojure.com/problem/" problem))
     (catch Exception e
       nil)))
 
@@ -61,7 +62,7 @@ e.g. (indent-rest-lines \"A\\nB\\nC\" 3) => \"A\\n   B\\n   C\""
              " '[\n"
              "    ; copy the 4clojure test cases here\n"
              "  ])"))
-    (let [matches (re-seq #"(?<=\<pre class=\"test\"\>)[\s\S]+?(?=\</pre\>)" body)]
+    (let [matches (map #(.text %) (seq (.select body ".test")))]
       (str "(def test-cases\n"
            " '["
            (str/join "\n   " (for [test-case matches]
@@ -72,8 +73,7 @@ e.g. (indent-rest-lines \"A\\nB\\nC\" 3) => \"A\\n   B\\n   C\""
   [nsname problem]
   (let [body (fetch-body problem)]
     (str "(ns " nsname ")\n\n"
-         (comment-lines [(get-prob-title body)]) "\n"
-         "; \n"
+         "; " (get-prob-title body) "\n; \n"
          (comment-lines (wrap-text 75 (get-prob-desc body))) "\n\n"
          (get-test-cases body) "\n\n"
          "(def __\n"
